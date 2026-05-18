@@ -1,0 +1,23 @@
+name: Price Watch MXP→HAN
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-price:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install uv && uv sync --python 3.12
+      - run: uv run python -c "from fli.mcp.price_watch import run_price_watch; import json; print(json.dumps(run_price_watch(), indent=2, ensure_ascii=False))"
+        env:
+          FLI_EMAIL_SMTP_HOST: smtp.gmail.com
+          FLI_EMAIL_SMTP_PORT: 587
+          FLI_EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
+          FLI_EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          FLI_EMAIL_TO: ${{ secrets.EMAIL_USERNAME }}
