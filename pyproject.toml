@@ -1,0 +1,128 @@
+[project]
+name = "flights"
+version = "0.8.5"
+description = "A Python wrapper for Google Flights API"
+authors = [
+    { name = "Punit Arani", email = "punitsai36@gmail.com" }
+]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = ["flights", "google-flights", "travel", "api", "flight-search"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+]
+
+dependencies = [
+    "babel>=2.17.0",
+    "curl-cffi>=0.7.4",
+    "httpx>=0.28.1",
+    "plotext>=5.3.2",
+    "pydantic>=2.10.4",
+    "python-dotenv>=1.0.1",
+    "ratelimit>=2.2.1",
+    "tenacity>=9.0.0",
+    "typer>=0.15.1",
+]
+
+[project.optional-dependencies]
+mcp = [
+    "fastapi>=0.115.6",
+    "fastmcp>=3.2",
+    "pydantic-settings>=2.0.0",
+    "uvicorn>=0.34.0",
+]
+all = [
+    "flights[mcp]",
+]
+dev = [
+    "mkdocs-material[imaging]>=9.5.49",
+    "mkdocstrings[python]>=0.27.0",
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.25.2",
+    "pytest-xdist>=3.6.1",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.8.4",
+    "twine>=6.0.0",
+]
+
+[project.scripts]
+fli = "fli.cli:cli"
+fli-mcp = "fli.mcp._entry:run"
+fli-mcp-http = "fli.mcp._entry:run_http"
+
+[project.urls]
+Homepage = "https://github.com/punitarani/fli"
+Repository = "https://github.com/punitarani/fli"
+Documentation = "https://punitarani.github.io/fli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["fli"]
+
+[tool.pytest.ini_options]
+markers = [
+    "parallel: marks tests that can run in parallel"
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+indent-width = 4
+include = [
+    "fli/**/*.py",
+    "examples/**/*.py",
+    "tests/**/*.py",
+    "scripts/**/*.py",
+]
+exclude = [
+    "__pycache__",
+    ".pytest_cache",
+    ".venv",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", # pycodestyle
+    "F", # pyflakes
+    "I", # isort
+    "B", # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+    "D", # pydocstyle
+]
+ignore = ["D100", "D104", "D203", "D213"]
+
+# Per-file ignores for examples
+[tool.ruff.lint.per-file-ignores]
+"examples/**/*.py" = [
+    "D101", # Missing docstring in public class
+    "D102", # Missing docstring in public method
+    "D103", # Missing docstring in public function
+    "D401", # First line should be in imperative mood (examples use descriptive docstrings)
+    "T201", # print found (examples are meant to print output)
+]
+"tests/**/*.py" = [
+    "D101", # Missing docstring in public class
+    "D102", # Missing docstring in public method
+    "D103", # Missing docstring in public function
+]
+
+[tool.ruff.format]
+indent-style = "space"
+quote-style = "double"
+skip-magic-trailing-comma = false
