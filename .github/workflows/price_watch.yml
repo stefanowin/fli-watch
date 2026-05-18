@@ -14,10 +14,17 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install uv && uv sync --python 3.12
-      - run: uv run python -c "from fli.mcp.price_watch import run_price_watch; import json; print(json.dumps(run_price_watch(), indent=2, ensure_ascii=False))"
-        env:
-          FLI_EMAIL_SMTP_HOST: smtp.gmail.com
-          FLI_EMAIL_SMTP_PORT: 587
-          FLI_EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
-          FLI_EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          FLI_EMAIL_TO: ${{ secrets.EMAIL_USERNAME }}
+      - name: Check price and fail if under threshold
+        run: |
+          OUTPUT=$(uv run python -c "from fli.mcp.price_watch import run_price_watch; import json; print(json.dumps(run_price_watch()))")
+          echo "Risultato: $OUTPUT"
+          
+          # Estrae il prezzo dal JSON (cerca un numero nel testo)
+          PREZZO=$(echo $OUTPUT | grep -oE '[0-9]+' | head -n 1)
+          
+          echo "Prezzo rilevato: $PREZZO €"
+          
+          if [ "$PREZZO" -lt 700 ]; then
+            echo "ALLERTA! Il prezzo è sceso sotto i 700€!"
+            exit 1
+          fi
