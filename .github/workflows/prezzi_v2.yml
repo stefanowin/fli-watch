@@ -1,0 +1,32 @@
+name: Monitoraggio Prezzi Voli V2
+
+on:
+  schedule:
+    - cron: '0 8 * * *' # Gira in automatico ogni giorno alle 08:00
+  workflow_dispatch: # Ti permette di farlo partire a mano quando vuoi per fare i test
+
+jobs:
+  check-prezzi:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Controlla il codice
+        uses: actions/checkout@v4
+
+      - name: Configura Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Esegui lo script di controllo
+        id: cerca_prezzo
+        run: |
+          # Esegue lo script Python e salva il prezzo stampato dentro una variabile
+          PREZZO=$(python monitor.py)
+          echo "Il prezzo minimo trovato è: $PREZZO €"
+          
+          # Se il prezzo è inferiore a 700€, interrompe il flusso per mandarti la mail
+          if [ "$PREZZO" -lt 700 ]; then
+            echo "ALLERTA: Prezzo sotto la soglia di 700€!"
+            exit 1
+          fi
