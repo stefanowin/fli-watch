@@ -56,8 +56,18 @@ def _load_history() -> dict[str, Any]:
 
 def _save_history(history: dict[str, Any]) -> None:
     _WATCH_DIR.mkdir(parents=True, exist_ok=True)
+    # Rimuoviamo eventuali chiavi complesse annidate prima del salvataggio
+    clean_history = history.copy()
+    if "snapshots" in clean_history:
+        clean_snaps = []
+        for s in clean_history["snapshots"]:
+            s_copy = s.copy()
+            s_copy.pop("all_combinations", None)
+            clean_snaps.append(s_copy)
+        clean_history["snapshots"] = clean_snaps
+
     _WATCH_FILE.write_text(
-        json.dumps(history, indent=2, ensure_ascii=False),
+        json.dumps(clean_history, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
 
@@ -212,8 +222,6 @@ def _search_one_pair(
     )
 
     client = SearchFlights()
-    # Eseguiamo il metodo con un timeout incorporato gestito a livello di contesto Python
-    # Se il client fli supporta un timeout interno lo applichiamo qui, altrimenti catturiamo l'hang
     results = client.search(filters, currency=currency)
     if not results:
         return None
@@ -244,22 +252,21 @@ def _search_one_pair(
     return {
         "outbound_date": outbound_date,
         "return_date": return_date,
-        "price": price,
-        "currency": currency_code,
-        "stops": stops_count,
-        "airline": airline,
-        "duration_min": duration_min,
+        "price": float(price) if price is not None else None,
+        "currency": str(currency_code),
+        "stops": int(stops_count),
+        "airline": str(airline),
+        "duration_min": int(duration_min),
     }
 
 
 # ---------------------------------------------------------------------------
-# Multi-date clean sequential search with strict interruption
+# Multi-date clean sequential search
 # ---------------------------------------------------------------------------
 
 
 def _fetch_best_price(currency: str = "EUR") -> dict[str, Any] | None:
     from fli.core import parse_cabin_class, parse_max_stops, resolve_airport
-    import multiprocessing
 
     origin_ap = resolve_airport(ORIGIN)
     dest_ap = resolve_airport(DESTINATION)
@@ -270,34 +277,28 @@ def _fetch_best_price(currency: str = "EUR") -> dict[str, Any] | None:
 
     for out_d in OUTBOUND_DATES:
         for ret_d in RETURN_DATES:
-            print(f"Richiesta combinazione: {out_d} -> {ret_d}...", flush=True)
-            
-            # Isoliamo la chiamata in un processo separato per killarla se va in hang
-            p = multiprocessing.Process(
-                target=lambda q: q.put(_search_one_pair(origin_ap, dest_ap, seat_type, stops, out_d, ret_d, currency)),
-                args=(queue := multiprocessing.Queue(),)
-            )
-            p.start()
-            p.join(timeout=25) # Massimo 25 secondi a richiesta, poi si passa oltre
-            
-            if p.is_alive():
-                print(f"-> Sospeso: Google Flights non risponde per la data {out_d}.", flush=True)
-                p.terminate()
-                p.join()
-                continue
-                
-            if not queue.empty():
-                res = queue.get()
+            try:
+                res = _search_one_pair(origin_ap, dest_ap, seat_type, stops, out_d, ret_d, currency)
                 if res is not None:
-                    print(f"-> Trovato: {res['price']} {res['currency']}", flush=True)
                     candidates.append(res)
+            except Exception:
+                continue
 
     if not candidates:
         return None
 
-    best = min(candidates, key=lambda c: c["price"])
-    best["ts"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    best["all_combinations"] = sorted(candidates, key=lambda c: c["price"])
+    # Estraiamo il migliore e creiamo un dizionario pulito senza riferimenti complessi
+    raw_best = min(candidates, key=lambda c: c["price"])
+    best = {
+        "outbound_date": raw_best["outbound_date"],
+        "return_date": raw_best["return_date"],
+        "price": raw_best["price"],
+        "currency": raw_best["currency"],
+        "stops": raw_best["stops"],
+        "airline": raw_best["airline"],
+        "duration_min": raw_best["duration_min"],
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    }
     return best
 
 
@@ -331,23 +332,25 @@ def run_price_watch(
                 _save_history(history)
                 fetched_new = True
             else:
-                error_msg = "Nessun dato utile estratto (chiamate bloccate o nessun volo)."
+                error_msg = "Nessun volo trovato nelle finestre di date indicate."
         except Exception as exc:
-            error_msg = f"Errore: {exc}"
+            error_msg = f"Errore durante l'elaborazione: {exc}"
     else:
         if snapshots:
             latest_snap = snapshots[-1]
             alert_result = {
                 "soglia_eur": alert_threshold,
                 "prezzo_attuale": latest_snap.get("price"),
-                "azione": "Gia controllato oggi.",
+                "azione": "Già controllato oggi.",
             }
 
     latest = snapshots[-1] if snapshots else None
+    
+    # Restituiamo un dizionario finale ultra-pulito per evitare crash in json.dumps
     return {
         "success": latest is not None,
         "fetched_new_snapshot": fetched_new,
         "error": error_msg,
-        "alert": alert_result,
-        "latest_snapshot": latest,
+        "alert": {k: v for k, v in alert_result.items() if isinstance(v, (str, int, float, bool, None.__class__))},
+        "latest_snapshot": {k: v for k, v in latest.items() if k != "all_combinations"} if latest else None
     }
